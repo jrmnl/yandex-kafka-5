@@ -1,0 +1,171 @@
+# сделать ACL
+
+x-kafka-common-env: &kafka-common-env
+  KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+  KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'SSL:SASL_SSL,SSL_INTERNAL:SASL_SSL'
+  KAFKA_LISTENERS: 'SSL://:9093,SSL_INTERNAL://:19093'
+  KAFKA_INTER_BROKER_LISTENER_NAME: 'SSL_INTERNAL'
+  KAFKA_SSL_CLIENT_AUTH: 'required'
+  KAFKA_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM: https
+  KAFKA_LISTENER_NAME_BROKER_SASL_ENABLED_MECHANISMS: PLAIN
+  KAFKA_SASL_ENABLED_MECHANISMS: PLAIN
+  KAFKA_SASL_MECHANISM_INTER_BROKER_PROTOCOL: PLAIN
+  KAFKA_ZOOKEEPER_SASL_CLIENT: true
+  KAFKA_AUTHORIZER_CLASS_NAME: kafka.security.authorizer.AclAuthorizer
+  KAFKA_SUPER_USERS: User:admin
+
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.4.4
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+      KAFKA_OPTS: -Djava.security.auth.login.config=/etc/zookeeper/secrets/zookeeper.sasl.jaas.conf
+        -Dzookeeper.authProvider.1=org.apache.zookeeper.server.auth.SASLAuthenticationProvider
+        -Dzookeeper.allowSaslFailedClients=false
+        -Dzookeeper.requireClientAuthScheme=sasl
+    volumes:
+      - ./zookeeper-creds:/etc/zookeeper/secrets
+    ports:
+      - "2181:2181"
+    networks:
+    - yandex5
+
+  kafka-1:
+    image: confluentinc/cp-kafka:7.4.4
+    depends_on:
+      - zookeeper
+    ports:
+      - '9093:9093'
+    volumes:
+      - ./kafka-1-creds:/etc/kafka/secrets
+    environment:
+      <<: *kafka-common-env
+      KAFKA_BROKER_ID: 1
+      KAFKA_ADVERTISED_LISTENERS: 'SSL://localhost:9093,SSL_INTERNAL://kafka-1:19093'
+      KAFKA_SSL_KEYSTORE_FILENAME: 'kafka.kafka-1.keystore.pkcs12'
+      KAFKA_SSL_KEYSTORE_CREDENTIALS: 'kafka-1_keystore_creds'
+      KAFKA_SSL_KEY_CREDENTIALS: 'kafka-1_sslkey_creds'
+      KAFKA_SSL_TRUSTSTORE_FILENAME: 'kafka.kafka-1.truststore.jks'
+      KAFKA_SSL_TRUSTSTORE_CREDENTIALS: 'kafka-1_truststore_creds'
+      KAFKA_OPTS: -Djava.security.auth.login.config=/etc/kafka/secrets/kafka-1.sasl.jaas.conf
+    networks:
+    - yandex5
+
+  kafka-2:
+    image: confluentinc/cp-kafka:7.4.4
+    depends_on:
+      - zookeeper
+    ports:
+      - '9094:9094'
+    volumes:
+      - ./kafka-2-creds:/etc/kafka/secrets
+    environment:
+      <<: *kafka-common-env
+      KAFKA_BROKER_ID: 2
+      KAFKA_ADVERTISED_LISTENERS: 'SSL://localhost:9094,SSL_INTERNAL://kafka-2:19093'
+      KAFKA_SSL_KEYSTORE_FILENAME: 'kafka.kafka-2.keystore.pkcs12'
+      KAFKA_SSL_KEYSTORE_CREDENTIALS: 'kafka-2_keystore_creds'
+      KAFKA_SSL_KEY_CREDENTIALS: 'kafka-2_sslkey_creds'
+      KAFKA_SSL_TRUSTSTORE_FILENAME: 'kafka.kafka-2.truststore.jks'
+      KAFKA_SSL_TRUSTSTORE_CREDENTIALS: 'kafka-2_truststore_creds'
+      KAFKA_OPTS: -Djava.security.auth.login.config=/etc/kafka/secrets/kafka-2.sasl.jaas.conf
+    networks:
+    - yandex5
+
+  kafka-3:
+    image: confluentinc/cp-kafka:7.4.4
+    depends_on:
+      - zookeeper
+    ports:
+      - '9095:9095'
+    volumes:
+      - ./kafka-3-creds:/etc/kafka/secrets
+    environment:
+      <<: *kafka-common-env
+      KAFKA_BROKER_ID: 3
+      KAFKA_ADVERTISED_LISTENERS: 'SSL://localhost:9095,SSL_INTERNAL://kafka-3:19093'
+      KAFKA_SSL_KEYSTORE_FILENAME: 'kafka.kafka-3.keystore.pkcs12'
+      KAFKA_SSL_KEYSTORE_CREDENTIALS: 'kafka-3_keystore_creds'
+      KAFKA_SSL_KEY_CREDENTIALS: 'kafka-3_sslkey_creds'
+      KAFKA_SSL_TRUSTSTORE_FILENAME: 'kafka.kafka-3.truststore.jks'
+      KAFKA_SSL_TRUSTSTORE_CREDENTIALS: 'kafka-3_truststore_creds'
+      KAFKA_OPTS: -Djava.security.auth.login.config=/etc/kafka/secrets/kafka-3.sasl.jaas.conf
+    networks:
+    - yandex5
+
+  kafka-init:
+    image: confluentinc/cp-kafka:7.4.4
+    volumes:
+      # для упрощения переиспользую креды первого брокера
+      - ./kafka-1-creds:/etc/kafka/secrets
+      - ./create-topics.sh:/create-topics.sh
+    depends_on:
+      - zookeeper
+      - kafka-1
+      - kafka-2
+      - kafka-3
+    entrypoint: [ "sh", "/create-topics.sh" ]
+    networks:
+    - yandex5
+
+  ui:
+    image: provectuslabs/kafka-ui:v0.7.2
+    depends_on:
+      - zookeeper
+      - kafka-1
+      - kafka-2
+      - kafka-3
+    ports:
+      - "8080:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka-1:19093,kafka-2:19093,kafka-3:19093
+      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
+      KAFKA_CLUSTERS_0_SSL_TRUSTSTORELOCATION: /kafka.truststore.jks
+      KAFKA_CLUSTERS_0_SSL_TRUSTSTOREPASSWORD: 'BrRsHy48f8bG7ULA'
+      KAFKA_CLUSTERS_0_PROPERTIES_SECURITY_PROTOCOL: SASL_SSL
+      KAFKA_CLUSTERS_0_PROPERTIES_SSL_KEYSTORE_LOCATION: /kafka.keystore.pkcs12
+      KAFKA_CLUSTERS_0_PROPERTIES_SSL_KEYSTORE_TYPE: PKCS12
+      KAFKA_CLUSTERS_0_PROPERTIES_SSL_KEYSTORE_PASSWORD: 'BrRsHy48f8bG7ULA'
+      KAFKA_CLUSTERS_0_PROPERTIES_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM: '' # DISABLE COMMON NAME VERIFICATION
+      KAFKA_CLUSTERS_0_PROPERTIES_SASL_MECHANISM: PLAIN
+      KAFKA_CLUSTERS_0_PROPERTIES_SASL_JAAS_CONFIG: 'org.apache.kafka.common.security.plain.PlainLoginModule required username="admin" password="admin-secret";'
+    volumes:
+      # для упрощения переиспользую креды первого брокера
+      - ./kafka-1-creds/kafka.kafka-1.keystore.pkcs12:/kafka.keystore.pkcs12
+      - ./kafka-1-creds/kafka.kafka-1.truststore.jks:/kafka.truststore.jks
+    networks:
+    - yandex5
+
+  app:
+    depends_on:
+      - zookeeper
+      - kafka-1
+      - kafka-2
+      - kafka-3
+      - kafka-init
+    build:
+      context: ./app
+    environment:
+      BOOTSTRAP_SERVERS: kafka-1:19093,kafka-2:19093,kafka-3:19093
+      SSL_CA_LOCATION: /etc/app/secrets/ca.crt
+      SSL_CERTIFICATE_LOCATION: /etc/app/secrets/kafka-1.crt
+      SSL_KEY_LOCATION: /etc/app/secrets/kafka-1.key
+      TOPIC_1: topic1
+      TOPIC_2: topic2
+      PRODUCER_USERNAME: producer
+      PRODUCER_PASSWORD: producer-secret
+      CONSUMER_USERNAME: consumer
+      CONSUMER_PASSWORD: consumer-secret
+      CONSUMER_GROUP: app_group
+    volumes:
+      - ./ca.crt:/etc/app/secrets/ca.crt
+      # для упрощения переиспользую креды первого брокера
+      - ./kafka-1-creds/kafka-1.crt:/etc/app/secrets/kafka-1.crt
+      - ./kafka-1-creds/kafka-1.key:/etc/app/secrets/kafka-1.key
+    networks:
+    - yandex5
+
+networks:
+  yandex5:

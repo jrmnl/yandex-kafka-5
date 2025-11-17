@@ -1,0 +1,49 @@
+openssl req -new -nodes -x509 -days 365 -newkey rsa:2048 -keyout ca.key -out ca.crt -config ca.cnf
+
+cat ca.crt ca.key > ca.pem
+
+openssl req -new \
+    -newkey rsa:2048 \
+    -keyout kafka-client-creds/kafka-client.key \
+    -out kafka-client-creds/kafka-client.csr \
+    -config kafka-client-creds/kafka-client.cnf \
+    -nodes 
+
+openssl x509 -req \
+    -days 3650 \
+    -in kafka-client-creds/kafka-client.csr \
+    -CA ca.crt \
+    -CAkey ca.key \
+    -CAcreateserial \
+    -out kafka-client-creds/kafka-client.crt \
+    -extfile kafka-client-creds/kafka-client.cnf \
+    -extensions v3_req 
+
+openssl pkcs12 -export \
+    -in kafka-client-creds/kafka-client.crt \
+    -inkey kafka-client-creds/kafka-client.key \
+    -chain \
+    -CAfile ca.pem \
+    -name kafka-client \
+    -out kafka-client-creds/kafka-client.p12 \
+    -password pass:BrRhgdgtg5G7ULC
+
+keytool -importkeystore \
+    -deststorepass BrRhgdgtg5G7ULC \
+    -destkeystore kafka-client-creds/kafka.kafka-client.keystore.pkcs12 \
+    -srckeystore kafka-client-creds/kafka-client.p12 \
+    -deststoretype PKCS12  \
+    -srcstoretype PKCS12 \
+    -noprompt \
+    -srcstorepass BrRhgdgtg5G7ULC
+
+keytool -import \
+    -file ca.crt \
+    -alias ca \
+    -keystore kafka-client-creds/kafka.kafka-client.truststore.jks \
+    -storepass BrRhgdgtg5G7ULC \
+    -noprompt 
+
+echo "BrRhgdgtg5G7ULC" > kafka-client-creds/kafka-client_sslkey_creds
+echo "BrRhgdgtg5G7ULC" > kafka-client-creds/kafka-client_keystore_creds
+echo "BrRhgdgtg5G7ULC" > kafka-client-creds/kafka-client_truststore_creds
